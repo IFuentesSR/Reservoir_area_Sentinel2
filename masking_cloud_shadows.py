@@ -6,9 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from s2cloudless import S2PixelCloudDetector, CloudMaskRequest, get_s2_evalscript
 from scipy.ndimage.interpolation import shift
-%matplotlib inline
 
-outer_path = 'S2A_MSIL1C_20220102T001111_N0301_R073_T55JGG_20220102T013405.SAFE'
 
 def unproj_array(img_band):
     with rasterio.open(img_band) as scl:
@@ -127,8 +125,3 @@ def save_mask(path, threshold=0.4, average_over=4, dilation_size=2):
     if 'mask{}.tif'.format(name) not in os.listdir('tmp'):
         with rasterio.open('tmp/mask{}.tif'.format(name), "w", **meta_higher) as dest:
             dest.write(sb_band)
-
-
-
-save_mask(outer_path)
-mask, meta, meta_higher, sorted_bands = cloud_shadow_mask(outer_path)

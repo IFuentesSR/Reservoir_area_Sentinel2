@@ -5,19 +5,9 @@ from rasterio.warp import reproject, Resampling
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from s2cloudless import S2PixelCloudDetector, CloudMaskRequest, get_s2_evalscript
 from scipy.ndimage.interpolation import shift
 import shapefile
 from shapely.geometry import Polygon, MultiPolygon
-%matplotlib inline
-
-
-
-
-outer_path = 'S2A_MSIL1C_20220102T001111_N0301_R073_T55JGG_20220102T013405.SAFE'
-shapefile_path = "../namoi_dams2.shp"
-dam = 's242-1'
-
 
 
 def get_feature(shape_path, dam):
@@ -130,20 +120,25 @@ def get_band_paths(outer_path):
     return path_bands2
 
 
+def water_index(array):
+    array = array / 10000
+    blue = array[0,:,:,0]
+    green = array[0,:,:,1]
+    red = array[0,:,:,2]
+    nir = array[0,:,:,3]
+    swir1 = array[0,:,:,4]
+    swir2 = array[0,:,:,5]
+    water_ix = 1.7204 + 171 * green + 3 * red - 70 * nir - 45 * swir1 - 71 * swir2
+    return water_ix
+
+
 def inundated_area_calculation(outer_path, shapefile, dam):
     paths = get_band_paths(outer_path)
     cloud_mask = get_windows(shapefile, dam, paths[-1])
     band_list = [get_windows(shapefile, dam, n) for n in paths[:-1]]
     agg_array = np.stack([n[0] for n in band_list]).transpose(1, 2, 3, 0)
     mask = np.where(agg_array[0,:,:,0] == 0, 0, 1)
-    agg_array = agg_array / 10000
-    blue = agg_array[0,:,:,0]
-    green = agg_array[0,:,:,1]
-    red = agg_array[0,:,:,2]
-    nir = agg_array[0,:,:,3]
-    swir1 = agg_array[0,:,:,4]
-    swir2 = agg_array[0,:,:,5]
-    water_ix = 1.7204 + 171 * green + 3 * red - 70 * nir - 45 * swir1 - 71 * swir2
+    water_ix = water_index(agg_array)
     water_thresh = 0
     masked_water = np.where(mask == 0, np.nan, water_ix)
     masked_water = np.where(cloud_mask[0][0, :, :] > 0, np.nan, masked_water)
@@ -154,7 +149,3 @@ def inundated_area_calculation(outer_path, shapefile, dam):
     water_arr = np.where(masked_water > water_thresh, 1, 0)
     inundated_area = np.sum(water_arr) * pixel_area
     return dam, pd.to_datetime(outer_path[11:19], format='%Y%m%d'), inundated_area, unmasked_ratio
-
-
-
-dam, date, inundated_area, unmasked_ratio = inundated_area_calculation(outer_path, shapefile_path, dam)
