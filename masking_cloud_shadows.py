@@ -9,6 +9,19 @@ from scipy.ndimage.interpolation import shift
 
 
 def unproj_array(img_band):
+    """Reads image as array.
+
+    Parameters
+    ----------
+    img_band : str
+        path to Sentinel 2 band.
+
+    Returns
+    -------
+    band : np.array
+        array with pixel values of image.
+
+    """
     with rasterio.open(img_band) as scl:
         band = scl.read()
         scl.close()
@@ -16,6 +29,23 @@ def unproj_array(img_band):
 
 
 def read_band(img_band):
+    """Reads Sentinel 2 image.
+
+    Parameters
+    ----------
+    img_band : str
+        path to Sentinel 2 band.
+
+    Returns
+    -------
+    band : np.array
+        array for img_band.
+    meta: dictionary
+        metadata of img_band.
+    aff : dictionary
+        affine for img_band.
+
+    """
     with rasterio.open(img_band) as scl:
         band = scl.read()
         meta = scl.meta
@@ -26,6 +56,19 @@ def read_band(img_band):
 
 
 def get_meta(img_band):
+    """Retrieves metadata of image.
+
+    Parameters
+    ----------
+    img_band : str
+        path to Sentinel 2 band.
+
+    Returns
+    -------
+    meta : dictionary
+        metadata of img_band updated to uint8 dtype.
+
+    """
     with rasterio.open(img_band) as scl:
         meta = scl.meta
         meta.update({'dtype':'uint8'})
@@ -34,6 +77,21 @@ def get_meta(img_band):
 
 
 def resample_bands(img_band, sub_band):
+    """Resamples sub_band to img_band.
+
+    Parameters
+    ----------
+    img_band : str
+        path to Sentinel 2 band (target scale).
+    sub_band : str
+        path to Sentinel 2 band (old_scale).
+
+    Returns
+    -------
+    sb_band : np.array
+        resampled array for sub_band.
+
+    """
     lead_band, lead_meta, aff = read_band(img_band)
     tmparr = np.empty_like(lead_band)
     sb_band, sb_meta, sb_aff = read_band(sub_band)
@@ -48,6 +106,25 @@ def resample_bands(img_band, sub_band):
 
 
 def resample_img(inner_path):
+    """resample high resolution to lower resolution (60 m of B01).
+
+    Parameters
+    ----------
+    inner_path : str
+        path to granule subfolder in Sentinel 2.
+
+    Returns
+    -------
+    arrays_cat : np.array
+        array of resampled bands in image.
+    meta : dictionary
+        metadata of resampled bands.
+    meta_higher : dictionary
+        metadata for higher resolution bands.
+    sorted_bands : list
+        paths of sorted bands.
+
+    """
     band_paths = [os.path.join(os.path.join(inner_path, 'IMG_DATA'), n)
                   for n in os.listdir(os.path.join(inner_path, 'IMG_DATA'))]
     bands = ['B01', 'B02', 'B04', 'B05', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
@@ -66,6 +143,20 @@ def resample_img(inner_path):
 
 
 def get_azizen(path):
+    """Retrieves azimuth and zenith angles from metadata.
+
+    Parameters
+    ----------
+    path : str
+        path to metadata file.
+
+    Returns
+    -------
+    mean_azimuth : float
+        mean solar azimuth angle.
+    zenith_angle : float
+        mean zenith viewing angle.
+    """
     with open(path, 'r') as f:
         data = f.read()
         f.close()
@@ -83,6 +174,33 @@ def get_azizen(path):
 
 
 def cloud_shadow_mask(path, threshold=0.4, average_over=4, dilation_size=2):
+    """Creates mask array, metadata, metadata for higher resolution bands, and
+    list of sorted band paths.
+
+    Parameters
+    ----------
+    path : str
+        path to Sentinel 2 image folder.
+    threshold : float
+        cloud probability threshold for mask.
+    average_over : integer
+        Size of the disk in pixels for performing convolution
+        (averaging probability over pixels).
+    dilation_size : integer
+        Size of the disk in pixels for performing dilation.
+
+    Returns
+    -------
+    masked : np.array
+        cloud-shadows mask array.
+    meta : dictionary
+        metadata of cloud band (60 m resolution).
+    meta_higher : dictionary
+        metadata of higher resolution bands (10 m resolution).
+    sorted : list
+        list of sorted band paths.
+
+    """
     inner_path = os.path.join(path,
                               'GRANULE',
                               os.listdir(os.path.join(path, 'GRANULE'))[0])
@@ -94,6 +212,7 @@ def cloud_shadow_mask(path, threshold=0.4, average_over=4, dilation_size=2):
     metadata_path = os.path.join(inner_path,
                                  [n for n in os.listdir(inner_path)
                                   if n.endswith('.xml')][0])
+    # projecting clouds for shadow masking
     azi, zen = get_azizen(metadata_path)
     azimuth = (azi * np.pi /180) + (0.5 * np.pi)
     x = np.round(np.cos(azimuth) * 15)
@@ -105,6 +224,26 @@ def cloud_shadow_mask(path, threshold=0.4, average_over=4, dilation_size=2):
 
 
 def save_mask(path, threshold=0.4, average_over=4, dilation_size=2):
+    """Creates tmp folder and saves cloud-shadows mask for S2 image in path.
+
+    Parameters
+    ----------
+    path : str
+        path to Sentinel 2 image folder.
+    threshold : float
+        cloud probability threshold for mask.
+    average_over : integer
+        Size of the disk in pixels for performing convolution
+        (averaging probability over pixels).
+    dilation_size : integer
+        Size of the disk in pixels for performing dilation.
+
+    Returns
+    -------
+    None
+        Saves mask as a tif file in tmp folder.
+
+    """
     if 'tmp' not in os.listdir():
         os.mkdir('tmp')
     array, meta, meta_higher, sorted_bands = cloud_shadow_mask(path,
