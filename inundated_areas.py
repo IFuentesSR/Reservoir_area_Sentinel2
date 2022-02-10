@@ -1,4 +1,5 @@
 import os
+import re
 import rasterio
 import rasterio.mask
 from rasterio.warp import reproject, Resampling
@@ -407,8 +408,9 @@ def inundated_area_calculation(outer_path, shapefile, dam):
     buff_fea_area = buffered_area(get_feature(shapefile, dam))[1]
     unmasked_ratio = unmasked_area / buff_fea_area
     water_arr = np.where(masked_water > water_thresh, 1, 0)
+    date = re.findall('_\d{8}T', outer_path)[0][1:-1]
     inundated_area = np.sum(water_arr) * pixel_area
-    return dam, pd.to_datetime(outer_path[11:19], format='%Y%m%d'), inundated_area, unmasked_ratio
+    return dam, pd.to_datetime(date, format='%Y%m%d'), inundated_area, unmasked_ratio
 
 
 def croping_display(outer_path, shape, dam):
@@ -437,7 +439,7 @@ def croping_display(outer_path, shape, dam):
               (coords[2], coords[3]), (coords[0], coords[3])]
     outer_poly = Polygon(coords)
     paths = get_band_paths(outer_path)
-    date = outer_path[11:19]
+    date = re.findall('_\d{8}T', outer_path)[0][1:-1]
     cloud_mask, mask_meta = croping(paths[-1], outer_poly)
     band_list = [croping(n, outer_poly) for n in paths[:-1]]
     agg_array = np.stack([n[0] for n in band_list]).transpose(1, 2, 3, 0)
